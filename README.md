@@ -27,6 +27,6 @@ Spike Prime transitioned from version 2 to version 3 in the summer of 2023. The 
 | ![set_1_motor_rotation_to_cm](./images/set_1_motor_rotation_to_cm.png) | `set_1_motor_rotation_to_cm(17.5)`|
 | ![play_beep_for_seconds](./images/play_beep_for_seconds.png) | `play_beep_for_seconds(60, 0.2)`|
 | ![wait_seconds](./images/wait_seconds.png) | `wait_seconds(1)`|
-| ![wait_until](wait_until.png) | `wait_until(lambda: expression)`|
+| ![wait_until](./images/wait_until.png) | `wait_until(lambda: expression)`|
 | ![is_color](./images/is_color.png) | `is_color(port.A, color.RED)`|
 | ![get_color](./images/get_color.png) | `get_color(port.A)`|
