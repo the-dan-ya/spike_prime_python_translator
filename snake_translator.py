@@ -1,7 +1,13 @@
 #Beginning of snake_translator
 '''
 This is the code for the snake translator. For latest version go to:
-https://raw.githubusercontent.com/the-dan-ya/spike_prime_python_translator/main/snake_translator.py
+https://github.com/the-dan-ya/spike_prime_python_translator/blob/main/snake_translator.py
+
+Documentation -> README.md:
+https://github.com/the-dan-ya/spike_prime_python_translator/blob/main/README.md
+
+Change Log: 
+9/28/2023 Initial Version
 '''
 from hub import light_matrix, port, motion_sensor, button, sound
 import runloop, motor, motor_pair, color_sensor, color
@@ -138,3 +144,5 @@ def is_color(color_port:int, color_constant:int):
 
 def get_color(color_port:int):
     return color_sensor.color(color_port)
+
+#END OF TRANSLATOR
