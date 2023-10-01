@@ -179,6 +179,9 @@ def get_color(color_port:int):
 
 #Use below and math :)
 
+def relative_position(motor_port:int):
+    return motor.relative_position(motor_port)
+
 def reflection(color_port:int):
     return color_sensor.reflection(color_port)
 
