@@ -6,9 +6,10 @@ https://github.com/the-dan-ya/spike_prime_python_translator/blob/main/snake_tran
 Documentation -> README.md:
 https://github.com/the-dan-ya/spike_prime_python_translator/blob/main/README.md
 
-Change Log: 
+Change Log:
 9/28/2023 Initial Version
 9/30/2023 Removed async functions for better alignment with word blocks
+10/2/2023 Fixed after async call sleep time. name cleanup
 '''
 
 from hub import light_matrix, port, motion_sensor, button, sound
@@ -16,7 +17,8 @@ import runloop, motor, motor_pair, color_sensor, color #from lego
 import time #from micropython
 from app import sound as appsound
 
-default_movement_speed = 360
+# change names to follow convention: velocity is deg/sec, speed is percent of full speed as in wb
+default_movement_velocity = 360
 
 degrees_per_cm = 360/17.5
 
@@ -27,18 +29,22 @@ class unit:
     ROTATIONS = 3
     SECONDS = 4
 
+
 class direction:
     FORWARD = 101
     BACKWARD = -101
 
-default_motor_speeds = {
-    
-} 
+default_motor_velocities = {
+
+}
+
+movement_motors = []
+
 
 def absolute_position_wb2py(wb_position:int):
     return ((wb_position+180) % 360) - 180
 
-def unit_to_degrees(amount:float, in_unit:int, speed:int):
+def unit_to_degrees(amount:float, in_unit:int, veclocity:int= 0):
     if in_unit == unit.CM:
         return int(amount * degrees_per_cm)
     elif in_unit == unit.ROTATIONS:
@@ -46,32 +52,48 @@ def unit_to_degrees(amount:float, in_unit:int, speed:int):
     elif in_unit == unit.IN:
         return int(amount*degrees_per_cm*2.54)
     elif in_unit == unit.SECONDS:
-        return int(amount*(speed))
+        return int(amount*(veclocity))
     else:
         return int(amount)
 
-def get_default_speed_for(motor_port):
-    if motor_port in default_motor_speeds.keys():
-        return default_motor_speeds[motor_port]
+def get_default_velocity_for(motor_port):
+    if motor_port in default_motor_velocities.keys():
+        return default_motor_velocities[motor_port]
     else:
-        return default_movement_speed
+        return default_movement_velocity
+
+# move up because needed for wait async completion
+#CONTROL
+def wait_seconds(amount:float):
+    time.sleep_ms(int(amount*1000))
+
+def wait_until(function):
+    while not function():
+        pass
 
 #MOTORS
 def run_for(motor_port:int, orientation: int, amount: float, in_unit: int):
-    start_position = motor.relative_position(motor_port)
-    speed = get_default_speed_for(motor_port)
+    velocity = get_default_velocity_for(motor_port)
     if orientation == motor.COUNTERCLOCKWISE:
-        speed = -speed
-    while abs(motor.relative_position(motor_port)-(start_position)) < abs(unit_to_degrees(amount,in_unit, speed)):
-        motor.run(motor_port, speed)
+        velocity = -velocity
+    degrees_to_run = unit_to_degrees(amount,in_unit, velocity)
+    ''' alternatively, check relative position until done
+    start_position = motor.relative_position(motor_port)
+    while abs(motor.relative_position(motor_port)-(start_position)) < abs(degrees_to_run):
+        motor.run(motor_port, velocity)
     motor.stop(motor_port)
+    '''
+    motor.run_for_degrees(motor_port, degrees_to_run, velocity)
+    time.sleep_ms(int(1000*(abs(degrees_to_run)/velocity)))
+    wait_until(lambda:motor.velocity(motor_port) ==0)
+
 
 def go_to_absolute_position(motor_port:int, orientation:int, wb_position:int):
-    speed = get_default_speed_for(motor_port)
+    velocity = get_default_velocity_for(motor_port)
     target_position = absolute_position_wb2py(wb_position)
     current_position = motor.absolute_position(motor_port)
     if target_position != current_position:
-        motor.run_to_absolute_position(motor_port,target_position,speed,direction = orientation)
+        motor.run_to_absolute_position(motor_port,target_position,velocity,direction = orientation)
         degrees_to_run = 0
         if orientation == motor.CLOCKWISE:
             if target_position > current_position:
@@ -88,60 +110,68 @@ def go_to_absolute_position(motor_port:int, orientation:int, wb_position:int):
                 degrees_to_run = target_position-current_position
             else:
                 degrees_to_run = current_position-target_position
-        time.sleep_ms(int(1000*((degrees_to_run)/speed)))
+        time.sleep_ms(int(1000*(abs(degrees_to_run)/velocity)))
+        wait_until(lambda:motor.velocity(motor_port) ==0)
 
 def start_motor(motor_port:int, orientation:int):
-    motor_speed = get_default_speed_for(motor_port)
+    velocity = get_default_velocity_for(motor_port)
     if orientation == motor.COUNTERCLOCKWISE:
-        motor_speed = -motor_speed
-    motor.run(motor_port, motor_speed)
+        velocity = - velocity
+    motor.run(motor_port, velocity)
 
 def stop_motor(motor_port:int):
     motor.stop(motor_port)
 
 def set_speed_to(motor_port:int, speed_percent:int):
-    default_motor_speeds[motor_port] = speed_percent*10
+    default_motor_velocities[motor_port] = speed_percent*10
 
 def absolute_position(motor_port:int):
     return motor.absolute_position(motor_port)
 
-def motor_speed(motor_port:int):
+def motor_speed_percent(motor_port:int):
+    # This is supposed to return deci-degree to be consistant with velocity params, but as of 10/1/2023 it's returning pct
     return abs(motor.velocity(motor_port))
 
 
 #MOVEMENT
-def move_for(steer_value: int, amount: float, in_unit: int):
-    move_speed=default_movement_speed
-    move_steer = steer_value
-    if steer_value == direction.FORWARD:
+def move_for(direction_steer: int, amount: float, in_unit: int):
+    velocity = default_movement_velocity
+    move_steer = direction_steer
+    if direction_steer == direction.FORWARD:
         move_steer = 0
-    elif steer_value == direction.BACKWARD:
+    elif direction_steer == direction.BACKWARD:
         move_steer = 0
-        move_speed = -default_movement_speed
-    degrees= unit_to_degrees(amount, in_unit,move_speed)
-    motor_pair.move_for_degrees(motor_pair.PAIR_1, degrees, move_steer, velocity= move_speed)
-    time.sleep_ms(int((degrees/move_speed)*1000))
+        velocity = -default_movement_velocity
+    degrees_to_run= unit_to_degrees(amount, in_unit, velocity)
+    motor_pair.move_for_degrees(motor_pair.PAIR_1, degrees_to_run, move_steer, velocity= velocity)
+    time.sleep_ms(int(abs(degrees_to_run/velocity)*1000))
+    # wait until it's done and stopped. Still need sleep other wise it may not even start
+    wait_until(lambda: motor.velocity(movement_motors[0])==0 and motor.velocity(movement_motors[1]) ==0 )
+
+
 
 def start_moving(steer_value: int):
-    start_move_speed = default_movement_speed
+    velocity = default_movement_velocity
     start_steer = steer_value
     if steer_value == direction.FORWARD:
         start_steer = 0
     elif steer_value == direction.BACKWARD:
         start_steer = 0
-        start_move_speed = -default_movement_speed
-    motor_pair.move(motor_pair.PAIR_1, start_steer, velocity= start_move_speed)
+        velocity = -default_movement_velocity
+    motor_pair.move(motor_pair.PAIR_1, start_steer, velocity= velocity)
 
 def stop_moving():
     motor_pair.stop(motor_pair.PAIR_1)
 
 def set_movement_speed_to(speed_percent:int):
-    global default_movement_speed
-    default_movement_speed=speed_percent*10
+    global default_movement_velocity
+    default_movement_velocity = speed_percent*10
 
 def set_movement_motors_to(left_drive:int, right_drive:int):
+    global movement_motors
     motor_pair.unpair(motor_pair.PAIR_1)
     motor_pair.pair(motor_pair.PAIR_1,left_drive, right_drive)
+    movement_motors = [left_drive, right_drive]
 
 def set_1_motor_rotation_to_cm(circumference:float):
     global degrees_per_cm
@@ -157,17 +187,11 @@ def play_beep_for_seconds(key_number:int, duration:float, volume=75):
     time.sleep_ms(int(duration*1000))
 
 #EVENTS
-#Please figure out on your own 
+#Please figure out on your own
 #See example in Competition Ready
 
-#CONTROL
-def wait_seconds(amount:float):
-    time.sleep_ms(int(amount*1000))
 
-def wait_until(function):
-    while not function():
-        pass
-        
+
 #Please learn basic python before coding in python
 
 #SENSORS
@@ -213,6 +237,7 @@ def go_to_relative_position_at_speed(motor_port:int, target_position:int, speed:
     current_position = motor.relative_position(motor_port)
     motor.run_to_relative_position(motor_port, target_position, speed*10)
     time.sleep_ms(int(abs(target_position-current_position)/(speed*10)*1000))
+    wait_until(lambda: motor.velocity(motor_port)==0)
 
 def move_until(steer_value:int, function):
     start_moving(steer_value)
