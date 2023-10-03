@@ -29,7 +29,6 @@ class unit:
     ROTATIONS = 3
     SECONDS = 4
 
-
 class direction:
     FORWARD = 101
     BACKWARD = -101
@@ -128,18 +127,17 @@ def set_speed_to(motor_port:int, speed_percent:int):
 def absolute_position(motor_port:int):
     return motor.absolute_position(motor_port)
 
-def motor_speed_percent(motor_port:int):
-    # This is supposed to return deci-degree to be consistant with velocity params, but as of 10/1/2023 it's returning pct
+def motor_speed(motor_port:int):
     return abs(motor.velocity(motor_port))
 
 
 #MOVEMENT
-def move_for(direction_steer: int, amount: float, in_unit: int):
+def move_for(direction_or_steer: int, amount: float, in_unit: int):
     velocity = default_movement_velocity
-    move_steer = direction_steer
-    if direction_steer == direction.FORWARD:
+    move_steer = direction_or_steer
+    if direction_or_steer == direction.FORWARD:
         move_steer = 0
-    elif direction_steer == direction.BACKWARD:
+    elif direction_or_steer == direction.BACKWARD:
         move_steer = 0
         velocity = -default_movement_velocity
     degrees_to_run= unit_to_degrees(amount, in_unit, velocity)
