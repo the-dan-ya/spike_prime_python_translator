@@ -13,7 +13,7 @@ Change Log:
 '''
 
 from hub import light_matrix, port, motion_sensor, button, sound
-import runloop, motor, motor_pair, color_sensor, color #from lego
+import runloop, motor, motor_pair, color_sensor, color, distance_sensor #from lego
 import time, math#from micropython
 from app import sound as appsound
 
@@ -54,6 +54,19 @@ def unit_to_degrees(amount:float, in_unit:int, veclocity:int= 0):
         return int(amount*(veclocity))
     else:
         return int(amount)
+
+def degrees_to_unit(amount:float, in_unit:int, velocity:int= 0):
+    if in_unit == unit.CM:
+        return int(amount / degrees_per_cm)
+    elif in_unit == unit.ROTATIONS:
+        return int(amount/360)
+    elif in_unit == unit.IN:
+        return int(amount/degrees_per_cm/2.54)
+    elif in_unit == unit.SECONDS:
+        return int(amount/(velocity))
+    else:
+        return int(amount)
+
 
 def get_default_velocity_for(motor_port):
     if motor_port in default_motor_velocities.keys():
