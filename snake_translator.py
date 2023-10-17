@@ -34,16 +34,14 @@ class direction:
     BACKWARD = -101
 
 default_motor_velocities = {
-
 }
 
 movement_motors = []
 
-
-def absolute_position_wb2py(wb_position:int):
+def _absolute_position_wb2py(wb_position:int):
     return ((wb_position+180) % 360) - 180
 
-def unit_to_degrees(amount:float, in_unit:int, veclocity:int= 0):
+def unit_to_degrees(amount:float, in_unit:int, in_velocity:int= 0):
     if in_unit == unit.CM:
         return int(amount * degrees_per_cm)
     elif in_unit == unit.ROTATIONS:
@@ -51,7 +49,7 @@ def unit_to_degrees(amount:float, in_unit:int, veclocity:int= 0):
     elif in_unit == unit.IN:
         return int(amount*degrees_per_cm*2.54)
     elif in_unit == unit.SECONDS:
-        return int(amount*(veclocity))
+        return int(amount*(in_velocity))
     else:
         return int(amount)
 
@@ -67,7 +65,6 @@ def degrees_to_unit(amount:float, in_unit:int, velocity:int= 0):
     else:
         return int(amount)
 
-
 def get_default_velocity_for(motor_port):
     if motor_port in default_motor_velocities.keys():
         return default_motor_velocities[motor_port]
@@ -81,28 +78,22 @@ def wait_seconds(amount:float):
 
 def wait_until(function):
     while not function():
-        pass
+        time.sleep_ms(10)
 
 #MOTORS
-def run_for(motor_port:int, orientation: int, amount: float, in_unit: int):
+def run_for(motor_port:int, orientation: int, amount: float, in_unit: int,wait = True):
     velocity = get_default_velocity_for(motor_port)
     if orientation == motor.COUNTERCLOCKWISE:
         velocity = -velocity
     degrees_to_run = unit_to_degrees(amount,in_unit, velocity)
-    ''' alternatively, check relative position until done
-    start_position = motor.relative_position(motor_port)
-    while abs(motor.relative_position(motor_port)-(start_position)) < abs(degrees_to_run):
-        motor.run(motor_port, velocity)
-    motor.stop(motor_port)
-    '''
     motor.run_for_degrees(motor_port, degrees_to_run, velocity)
-    time.sleep_ms(int(1000*(abs(degrees_to_run)/velocity)))
-    wait_until(lambda:motor.velocity(motor_port) ==0)
+    if wait:
+        time.sleep_ms(int(1000*(abs(degrees_to_run)/velocity)))
+        wait_until(lambda:motor.velocity(motor_port) ==0)
 
-
-def go_to_absolute_position(motor_port:int, orientation:int, wb_position:int):
+def go_to_absolute_position(motor_port:int, orientation:int, wb_position:int,wait = True):
     velocity = get_default_velocity_for(motor_port)
-    target_position = absolute_position_wb2py(wb_position)
+    target_position = _absolute_position_wb2py(wb_position)
     current_position = motor.absolute_position(motor_port)
     if target_position != current_position:
         motor.run_to_absolute_position(motor_port,target_position,velocity,direction = orientation)
@@ -122,8 +113,9 @@ def go_to_absolute_position(motor_port:int, orientation:int, wb_position:int):
                 degrees_to_run = target_position-current_position
             else:
                 degrees_to_run = current_position-target_position
-        time.sleep_ms(int(1000*(abs(degrees_to_run)/velocity)))
-        wait_until(lambda:motor.velocity(motor_port) ==0)
+        if wait:
+            time.sleep_ms(int(1000*(abs(degrees_to_run)/velocity)))
+            wait_until(lambda:motor.velocity(motor_port) ==0)
 
 def start_motor(motor_port:int, orientation:int):
     velocity = get_default_velocity_for(motor_port)
@@ -137,15 +129,16 @@ def stop_motor(motor_port:int):
 def set_speed_to(motor_port:int, speed_percent:int):
     default_motor_velocities[motor_port] = speed_percent*10
 
+#todo revert _absolute_position_wb2py
 def absolute_position(motor_port:int):
     return motor.absolute_position(motor_port)
 
+#python api bug
 def motor_speed(motor_port:int):
-    return abs(motor.velocity(motor_port))
-
+    return abs(motor.velocity(motor_port)) 
 
 #MOVEMENT
-def move_for(direction_or_steer: int, amount: float, in_unit: int):
+def move_for(direction_or_steer: int, amount: float, in_unit: int,wait = True):
     velocity = default_movement_velocity
     move_steer = direction_or_steer
     if direction_or_steer == direction.FORWARD:
@@ -155,11 +148,10 @@ def move_for(direction_or_steer: int, amount: float, in_unit: int):
         velocity = -default_movement_velocity
     degrees_to_run= unit_to_degrees(amount, in_unit, velocity)
     motor_pair.move_for_degrees(motor_pair.PAIR_1, degrees_to_run, move_steer, velocity= velocity)
-    time.sleep_ms(int(abs(degrees_to_run/velocity)*1000))
+    if wait:
+        time.sleep_ms(int(abs(degrees_to_run/velocity)*1000))
     # wait until it's done and stopped. Still need sleep other wise it may not even start
-    wait_until(lambda: motor.velocity(movement_motors[0])==0 and motor.velocity(movement_motors[1]) ==0 )
-
-
+        wait_until(lambda: motor.velocity(movement_motors[0])==0 and motor.velocity(movement_motors[1]) ==0 )
 
 def start_moving(steer_value: int):
     velocity = default_movement_velocity
@@ -200,8 +192,6 @@ def play_beep_for_seconds(key_number:int, duration:float, volume=75):
 #EVENTS
 #Please figure out on your own
 #See example in Competition Ready
-
-
 
 #Please learn basic python before coding in python
 
@@ -244,10 +234,11 @@ def roll_angle():
 def set_relative_position_to(motor_port:int, relative:int):
     motor.reset_relative_position(motor_port, relative)
 
-def go_to_relative_position_at_speed(motor_port:int, target_position:int, speed:int):
+def go_to_relative_position_at_speed(motor_port:int, target_position:int, speed:int,wait = True):
     current_position = motor.relative_position(motor_port)
     motor.run_to_relative_position(motor_port, target_position, speed*10)
-    time.sleep_ms(int(abs(target_position-current_position)/(speed*10)*1000))
-    wait_until(lambda: motor.velocity(motor_port)==0)
+    if wait:
+        time.sleep_ms(int(abs(target_position-current_position)/(speed*10)*1000))
+        wait_until(lambda: motor.velocity(motor_port)==0)
 
 #END OF LIBRARY
