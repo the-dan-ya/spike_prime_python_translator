@@ -22,6 +22,8 @@ default_movement_velocity = 360
 
 degrees_per_cm = 360/17.5
 
+num_of_push = 2
+
 class unit:
     CM = 0
     IN = 1
@@ -135,7 +137,7 @@ def absolute_position(motor_port:int):
 
 #python api bug
 def motor_speed(motor_port:int):
-    return abs(motor.velocity(motor_port)) 
+    return abs(motor.velocity(motor_port))
 
 #MOVEMENT
 def move_for(direction_or_steer: int, amount: float, in_unit: int,wait = True):
