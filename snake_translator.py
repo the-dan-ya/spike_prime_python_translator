@@ -12,7 +12,7 @@ Change Log:
 10/2/2023 Fixed after async call sleep time. name cleanup
 '''
 
-from hub import light_matrix, port, motion_sensor, button, sound
+from hub import light, light_matrix, port, motion_sensor, button, sound
 import runloop, motor, motor_pair, color_sensor, color, distance_sensor #from lego
 import time, math#from micropython
 from app import sound as appsound
@@ -204,6 +204,9 @@ def is_color(color_port:int, color_constant:int):
 def get_color(color_port:int):
     return color_sensor.color(color_port)
 
+def distance_cm(sensor_port):
+    return distance_sensor.distance(sensor_port)/10.0
+
 #Use below and math :)
 
 def relative_position(motor_port:int):
@@ -218,14 +221,17 @@ def is_button_pressed(side:int):
     else:
         return button.pressed(button.RIGHT) > 0
 
+def is_tapped():
+    return motion_sensor.gesture() == motion_sensor.DOUBLE_TAPPED
+
 def start_moving_at_speed(left_speed: int, right_speed:int):
     motor_pair.move_tank(motor_pair.PAIR_1, left_speed*10, right_speed*10)
 
-def set_yaw_angle_to(angle:int):
-    motion_sensor.reset_yaw(-angle*10)
+def set_yaw_angle_to(angle:float):
+    motion_sensor.reset_yaw(-int(angle*10))
 
 def yaw_angle():
-    return -int(motion_sensor.tilt_angles()[0]/10)
+    return -(motion_sensor.tilt_angles()[0]/10)
 
 def pitch_angle():
     return int(motion_sensor.tilt_angles()[1]/10)
