@@ -22,7 +22,7 @@ default_movement_velocity = 360
 
 degrees_per_cm = 360/17.5
 
-num_of_push = 2
+num_of_push = 1
 
 class unit:
     CM = 0
