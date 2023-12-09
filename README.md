@@ -31,3 +31,9 @@ Spike Prime transitioned from version 2 to version 3 in the summer of 2023. The 
 | ![is_color](./images/is_color.png) | `is_color(port.A, color.RED)`|
 | ![get_color](./images/get_color.png) | `get_color(port.A)`|
 |More things I have yet to document.|
+
+## SAMPLE
+In the Competition Ready File there is:
+* A translation of every lesson
+* Translation of the guided mission and a simplified version of it
+* If you use a split screen to compare the python guided mission and the lessons in Spike Prime you will see how the translator works
