@@ -12,17 +12,19 @@ Change Log:
 10/2/2023 Fixed after async call sleep time. name cleanup
 10/29/2023 clean up with missions
 1/4/2024 Clean up naming conventions and functions
+7/27/2024 Fixed wb2py bug
 '''
 
 from hub import light, light_matrix, port, motion_sensor, button, sound
 import runloop, motor, motor_pair, color_sensor, color, distance_sensor, force_sensor #from lego
 import time, math#from micropython
 from app import sound as appsound
+from app import music as appmusic
 
 # change names to follow convention: velocity is deg/sec, speed is percent of full speed as in wb
-default_movement_speed = 50
+default_movement_speed = 30
 
-degrees_per_cm = 360/17.5
+degrees_per_cm = 360/27.57
 
 class unit:
     CM = 0
@@ -37,7 +39,7 @@ class direction:
 
 class size:
     LARGE = 0
-    MEDIUEM = 1
+    MEDIUM = 1
     SMALL = 2# large 1050 medium 1110 small 660
 
 default_motor_speeds = {
@@ -47,11 +49,13 @@ max_velocity = 1110 # large 1050 medium 1110 small 660
 
 movement_motors = []
 
+#WB is 0 to 360, PY is -180 to 180
 def _absolute_position_wb2py(wb_position:int):
-    if wb_position < 0:
-        return 360+wb_position
+    if wb_position > 180:
+        return wb_position-360
     else:
         return wb_position
+
     #return ((wb_position+180) % 360) - 180 #mod version
 
 def unit_to_degrees(amount:float, in_unit:int, in_velocity:int= 0):
@@ -66,7 +70,7 @@ def unit_to_degrees(amount:float, in_unit:int, in_velocity:int= 0):
     else:
         return int(amount)
 
-def degrees_to_unit(amount:float, in_unit:int, velocity:int= 0):
+def degrees_to_unit(amount:float, in_unit:int, in_velocity:int= 0):
     if in_unit == unit.CM:
         return int(amount / degrees_per_cm)
     elif in_unit == unit.ROTATIONS:
@@ -74,7 +78,7 @@ def degrees_to_unit(amount:float, in_unit:int, velocity:int= 0):
     elif in_unit == unit.IN:
         return int(amount/degrees_per_cm/2.54)
     elif in_unit == unit.SECONDS:
-        return int(amount/(velocity))
+        return int(amount/(in_velocity))
     else:
         return int(amount)
 
@@ -94,11 +98,15 @@ def wait_until(function):
         pass
 
 #MOTORS
-def run_for(motor_port:int, orientation: int, amount: float, in_unit: int, speed = 0, wait = True):
+def get_motor_speed(motor_port,speed=0):
     if speed != 0:
         in_speed = speed
     else:
         in_speed = get_default_speed_for(motor_port)
+    return in_speed
+
+def run_for(motor_port:int, orientation: int, amount: float, in_unit: int, speed = 0, wait = True):
+    in_speed=get_motor_speed(motor_port,speed)
     if orientation == motor.COUNTERCLOCKWISE:
         in_speed = -in_speed
     velocity = int(in_speed/100*max_velocity)
@@ -108,50 +116,26 @@ def run_for(motor_port:int, orientation: int, amount: float, in_unit: int, speed
         time.sleep_ms(int(1000*abs(degrees_to_run/velocity)))
         wait_until(lambda:motor.velocity(motor_port) ==0)
 
-def go_to_absolute_position(motor_port:int, orientation:int, wb_position:int,wait = True):
-    in_speed = get_default_speed_for(motor_port)
-    target_position = _absolute_position_wb2py(wb_position)
-    current_position = motor.absolute_position(motor_port)
-    if target_position != current_position:
-        motor.run_to_absolute_position(motor_port,target_position,int(in_speed/100*max_velocity),direction = orientation)
-        degrees_to_run = 0
-        if orientation == motor.CLOCKWISE:
-            if target_position > current_position:
-                degrees_to_run = target_position-current_position
-            else:
-                degrees_to_run = 360-current_position+target_position
-        elif orientation == motor.COUNTERCLOCKWISE:
-            if target_position < current_position:
-                degrees_to_run = current_position - target_position
-            else:
-                degrees_to_run = 360- target_position + current_position
-        elif orientation == motor.SHORTEST_PATH:
-            if target_position > current_position:
-                degrees_to_run = target_position-current_position
-            else:
-                degrees_to_run = current_position-target_position
-        if wait:
-            time.sleep_ms(int(1000*(abs(degrees_to_run)/(in_speed/100*max_velocity))))
-            wait_until(lambda:motor.velocity(motor_port) ==0)
+def go_to_absolute_position(motor_port:int, orientation:int, wb_position:int,speed:int = 0,wait = True):
+    in_speed=get_motor_speed(motor_port,speed)
+    target_position_py = _absolute_position_wb2py(wb_position)
+    motor.run_to_absolute_position(motor_port,target_position_py,int(in_speed/100*max_velocity),direction = orientation)
+    if wait:
+        time.sleep_ms(200)
+        wait_until(lambda:motor.velocity(motor_port) ==0)
 
 def start_motor(motor_port:int, orientation:int,speed=0):
-    if speed != 0:
-        in_speed = speed
-    else:
-        in_speed = get_default_speed_for(motor_port)
+    in_speed=get_motor_speed(motor_port,speed)
     if orientation == motor.COUNTERCLOCKWISE:
-        in_speed = - in_speed
+        in_speed = -in_speed
     motor.run(motor_port, int(in_speed/100*max_velocity))
 
 def stop_motor(motor_port:int):
     motor.stop(motor_port)
 
-def set_speed_to(motor_port:int, speed_percent:int):
-    default_motor_speeds[motor_port] = speed_percent
-
 def absolute_position(motor_port:int):
     py_position = motor.absolute_position(motor_port)
-    if py_position > 180: return py_position-360
+    if py_position < 0: return py_position+360
     else: return py_position
 
 #python api bug means it doesn't have to be converted :)
@@ -159,38 +143,42 @@ def motor_speed(motor_port:int):
     return abs(motor.velocity(motor_port))
 
 #MOVEMENT
-def move_for(direction_or_steer: int, amount: float, in_unit: int, speed = 0, wait = True):
-    if speed == 0:
-        in_speed = default_movement_speed
-    else:
+def get_movement_speed(speed):
+    if speed != 0:
         in_speed = speed
-    move_steer = direction_or_steer
+    else:
+        in_speed = default_movement_speed
+    return in_speed
+
+def get_steering_movement_speed(direction_or_steer,speed):
+    in_speed=get_movement_speed(speed)
+
     if direction_or_steer == direction.FORWARD:
         move_steer = 0
     elif direction_or_steer == direction.BACKWARD:
         move_steer = 0
         in_speed = -in_speed
-    velocity = int(in_speed/100*max_velocity)
+    else:
+        move_steer=direction_or_steer
+    return (move_steer, in_speed)
+
+def move_for(direction_or_steer: int, amount: float, in_unit: int, speed = 0, wait = True):
+    steer_speed = get_steering_movement_speed(direction_or_steer,speed)
+    velocity = int(steer_speed[1]/100*max_velocity)
     degrees_to_run= abs(unit_to_degrees(amount, in_unit, velocity))
-    motor_pair.move_for_degrees(motor_pair.PAIR_1, degrees_to_run, move_steer, velocity= velocity)
+    motor_pair.move_for_degrees(motor_pair.PAIR_1, degrees_to_run, steer_speed[0], velocity= velocity)
     if wait:
         time.sleep_ms(int(abs(degrees_to_run/velocity)*1000))
     # wait until it's done and stopped. Still need sleep other wise it may not even start
         wait_until(lambda: motor_speed(movement_motors[0])==0 and motor_speed(movement_motors[1]) ==0 )
 
-def start_moving(steer_value: int, speed = 0):
-    if speed == 0:
-        in_speed = default_movement_speed
-    else:
-        in_speed = speed
-    start_steer = steer_value
-    if steer_value == direction.FORWARD:
-        start_steer = 0
-    elif steer_value == direction.BACKWARD:
-        start_steer = 0
-        in_speed = -in_speed
-    velocity = int(in_speed/100*max_velocity)
-    motor_pair.move(motor_pair.PAIR_1, start_steer, velocity= velocity)
+def start_moving(direction_or_steer: int, speed = 0):
+    steer_speed = get_steering_movement_speed(direction_or_steer,speed)
+    velocity = int(steer_speed[1]/100*max_velocity)
+    motor_pair.move(motor_pair.PAIR_1, steer_speed[0], velocity= velocity)
+
+def start_moving_at_speed(left_speed: float, right_speed:float):
+    motor_pair.move_tank(motor_pair.PAIR_1, int(left_speed/100*max_velocity), int(right_speed/100*max_velocity))
 
 def stop_moving():
     motor_pair.stop(motor_pair.PAIR_1)
@@ -220,12 +208,12 @@ def set_movement_motor_size(motor_size: int):
 
 def set_wheel_size(wheel_size: int):
     if wheel_size == size.LARGE:
-        set_1_motor_rotation_to_cm(20.57)
+        set_1_motor_rotation_to_cm(27.57)
     else:
         set_1_motor_rotation_to_cm(17.5)
 
 #LIGHT
-#None for now and maybe never
+#None for now and future!
 
 #SOUND
 def play_beep_for_seconds(key_number:int, duration:float, volume=75):
@@ -268,9 +256,6 @@ def is_double_tapped():
 def is_tapped():
     return motion_sensor.gesture() == motion_sensor.TAPPED
 
-def start_moving_at_speed(left_speed: float, right_speed:float):
-    motor_pair.move_tank(motor_pair.PAIR_1, int(left_speed/100*max_velocity), int(right_speed/100*max_velocity))
-
 def set_yaw_angle_to(angle:float):
     motion_sensor.reset_yaw(-int(angle*10))
     wait_seconds(0.1) #the gyro sensor needs some time to update itself and gain conscience
@@ -286,12 +271,5 @@ def roll_angle():
 
 def set_relative_position_to(motor_port:int, relative:int):
     motor.reset_relative_position(motor_port, relative)
-
-def go_to_relative_position_at_speed(motor_port:int, target_position:int, speed:int,wait = True):
-    current_position = motor.relative_position(motor_port)
-    motor.run_to_relative_position(motor_port, target_position, int(speed/100*max_velocity))
-    if wait:
-        time.sleep_ms(int(abs(target_position-current_position)/(speed/100*max_velocity)*1000))
-        wait_until(lambda: motor.velocity(motor_port)==0)
 
 #END SNAKE_TRANSLATOR
